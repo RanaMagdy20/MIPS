@@ -1,0 +1,322 @@
+module CU 
+(   input wire [5:0] Opcode,Funct,
+    output reg MemtoReg, MemWrite, Branch, RegDst, RegWrite, Jump,bne,
+    output reg jr,jalr,
+    output reg [2:0] load,
+    output reg [1:0]multiply,divide,HI_sel,LO_sel,  ALUSrc, store,MultoRF,
+    output reg [3:0] ALUControl 
+);
+
+reg [1:0] ALUOp;
+
+
+
+//Main Decoder:
+always @(*) begin
+    Branch=1'b0;
+    Jump=1'b0;
+   // multiply='b00;
+    RegWrite=1'b0;
+    RegDst=1'b0; //rt
+    ALUSrc='b00;
+    MemWrite=1'b0;
+    MemtoReg=1'b0;
+    ALUOp=2'b00;
+    bne=1'b0;
+    load='d0;
+    store='d0;
+    
+    
+
+
+    case (Opcode) 
+    6'b000_000 : begin //R_type
+        RegWrite=1'b1;
+        RegDst=1'b1;
+        ALUOp=2'b10;
+    end
+    6'b100_011: begin //lw
+        RegWrite=1'b1;
+        ALUSrc='b01;
+        MemtoReg=1'b1;
+        ALUOp=2'b00;
+        load='d0;
+    end 
+    6'b100_001: begin //lh
+        RegWrite=1'b1;
+        ALUSrc='b01; //sign_ext
+        MemtoReg=1'b1;
+        ALUOp=2'b00; //add
+        load='d2; //sign_ext(Result[15:0])
+    end 
+    6'b100_000: begin //lb
+        RegWrite=1'b1;
+        ALUSrc='b01; //sign_ext
+        MemtoReg=1'b1;
+        ALUOp=2'b00; //add
+        load='d1; //sign_ext(Result[7:0])
+    end 
+     6'b100_100: begin //lbu
+        RegWrite=1'b1;
+        ALUSrc='b01; //sign_ext
+        MemtoReg=1'b1;
+        ALUOp=2'b00; //add
+        load='d3; //zero_ext(Result[7:0])
+    end        
+    6'b100_001: begin //lhu
+        RegWrite=1'b1;
+        ALUSrc='b01; //sign_ext
+        MemtoReg=1'b1;
+        ALUOp=2'b00; //add
+        load='d4; //zero_ext(Result[15:0])
+    end 
+    6'd001_111: begin //lui
+      RegWrite=1'b1;
+      load='d5;
+    end  
+    6'b101_011: begin //sw
+        ALUSrc='b01;
+        MemWrite=1'b1;
+        ALUOp=2'b00;
+        store=2'b00;
+    end     
+    6'b101_000: begin //sb
+        ALUSrc='b01;
+        MemWrite=1'b1;
+        ALUOp=2'b00;
+        store=2'b01;
+    end     
+    6'b101_001: begin //sh
+        ALUSrc='b01;
+        MemWrite=1'b1;
+        ALUOp=2'b00;
+        store=2'b10;
+    end     
+    
+     
+    6'b000_100: begin //beq
+        Branch=1'b1;
+        ALUOp=2'b01;
+    end 
+    6'b000_101: begin //bne
+        Branch=1'b1;
+        ALUOp=2'b01;
+        bne=1'b1;
+    end 
+    6'b001_000: begin //addi
+        RegWrite=1'b1;
+        ALUSrc='b01;
+        ALUOp=2'b00;
+    end 
+     6'b001_001: begin //addiu
+        RegWrite=1'b1;
+        ALUSrc='b01;
+        ALUOp=2'b00;
+    end   
+    6'b000_010: begin //j
+        ALUOp=2'b00;
+        Jump=1'b1;
+    end 
+    6'b000_011: begin //jal
+        ALUOp=2'b00;
+        Jump=1'b1;
+    end        
+    6'b011_100: begin //mul
+       // multiply=2'b11;
+        RegDst=1'b1;
+        RegWrite=1'b1;
+    end
+    6'b001_010: begin //slti
+      RegWrite=1'b1;
+      ALUOp=2'b10;
+      ALUSrc='b01; //sign_imm
+      //RegDst=1'b0; //store at [rt]
+    end
+    6'd001_100: begin //andi
+      RegWrite=1'b1;
+      ALUOp=2'b10;
+      ALUSrc='b10; //zero extend
+    end
+    6'd001_101: begin //ori
+      RegWrite=1'b1;
+      ALUOp=2'b10;
+      ALUSrc='b10; //zero extend
+    end   
+    6'd001_101: begin //xori
+      RegWrite=1'b1;
+      ALUOp=2'b10;
+      ALUSrc='b10; //zero extend
+    end   
+ 
+    
+        
+
+    default : begin
+        RegWrite=1'b0;
+        RegDst=1'b0;
+        ALUSrc='b00;
+        MemWrite=1'b0;
+        MemtoReg=1'b0;
+        ALUOp=2'b00;
+       // multiply=2'b00;
+        Jump=1'b0;
+        Branch=1'b0;
+    end
+
+    endcase 
+end
+//
+//HI_LO_input_data:
+//multiplication & division :
+always @(*) begin
+    multiply='d0;
+    divide='d0;
+    HI_sel=2'b11; 
+    LO_sel=2'b11;
+    case(Opcode)
+    6'b011_100:begin //mul
+    multiply=2'b11;
+    end
+    6'b000_000 : begin //multiply in R-type 
+   if({ALUOp,Funct}==8'b10_011000) //mult
+   begin 
+        multiply=2'b11; //enable,signed 
+        HI_sel=2'b01; //mult_result
+        LO_sel=2'b01; //mult_result
+    end
+    else if ({ALUOp,Funct}== 8'b10_011001) //multu
+   begin 
+        multiply= 2'b10;
+        HI_sel=2'b01; //mult_result
+        LO_sel=2'b01; //mult_result
+    end
+    else if ({ALUOp,Funct}== 8'b10_011010) begin //div
+        divide=2'b11;
+        HI_sel=2'b10; //div_result
+        LO_sel=2'b10; //div_result
+    end
+    else if ({ALUOp,Funct}==8'b10_011011) begin //divu
+        divide=2'b10;
+        HI_sel=2'b10;  //div_result
+        LO_sel=2'b10; //div_result
+     end
+    else if ({ALUOp,Funct}==8'b10_010001 )begin //mthi
+        HI_sel=2'b00; 
+    end
+    else if ({ALUOp,Funct}==8'b10_010011 ) begin //mtlo
+        LO_sel=2'b00;
+    end
+    else begin
+    multiply=2'b00;
+    divide=2'b00;
+    HI_sel=2'b11; //invalid case
+    LO_sel=2'b11; //invalid case
+    end
+    end
+
+    default:begin
+    multiply=2'b00;
+    divide=2'b00;
+    HI_sel=2'b11; //invalid case
+    LO_sel=2'b11; //invalid case
+    end
+endcase
+end
+always @(*) begin
+    case (Opcode)
+    6'b011_100:  MultoRF='d1;
+    6'b000_000: begin
+        if({ALUOp,Funct}==8'b10_010000) //mfhi
+        MultoRF='d2;
+        else if ({ALUOp,Funct}==8'b10_010010) 
+        MultoRF='d3;
+        else 
+        MultoRF='d0;
+    end
+    default : MultoRF='d0;
+    endcase
+
+end
+
+
+
+
+
+
+
+
+
+//jr, jalr => R-type , jal => j-type
+always @(*) begin
+if (Opcode==6'b000_011) begin //jal
+    jr=1'b0;
+    jalr=1'b1;
+end
+else
+case ({ALUOp,Funct} )
+8'b10_001000 : begin //jr
+    jr = 1'b1;
+    jalr =1'b0;
+end
+8'b10_001001 : begin //jalr
+    jr = 1'b1;
+    jalr = 1'b1;
+end
+default: begin
+    jr= 1'b0;
+    jalr =1'b0;
+end
+endcase
+end
+
+//ALU Decoder:
+always @(*) begin
+
+if (Opcode ==  6'b001_010) //slti
+ALUControl = 4'b0111;
+
+else if (Opcode ==  6'b001_011) //sltiu
+ALUControl = 4'b1000;
+
+else if (Opcode == 6'b001_100) //andi
+ALUControl = 4'b0000;
+
+else if (Opcode == 6'b001_101) //ori
+ALUControl = 4'b0001;
+
+else if (Opcode == 6'b001_110) //xori
+ALUControl = 4'b0011;
+
+else begin 
+casex ({ALUOp,Funct})
+8'bx1_xxxxxx: ALUControl = 4'b0110; //sub
+8'b00_xxxxxx: ALUControl = 4'b0010; //add
+//R-type: (ALU):
+8'b1x_100100: ALUControl = 4'b0000; //and
+8'b1x_100101: ALUControl = 4'b0001; //or
+8'b1x_10000x: ALUControl = 4'b0010; //add , addu
+8'b1x_100110: ALUControl = 4'b0011; //xor
+8'b1x_100010: ALUControl = 4'b0110; //sub 
+8'b1x_101010: ALUControl = 4'b0111; //slt
+8'b1x_101011: ALUControl = 4'b1000; //sltu
+8'b1x_100111: ALUControl = 4'b1001; //nor
+8'b1x_100011: ALUControl = 4'b1010;// subu
+8'b1x_000000: ALUControl = 4'b1011; //sll
+8'b1x_000010: ALUControl = 4'b1100; //srl
+8'b1x_000011: ALUControl = 4'b1101; //sra
+8'b1x_000100: ALUControl = 4'b1110; //sllv
+8'b1x_000110: ALUControl = 4'b1111; //srlv
+8'b1x_000111: ALUControl = 4'b0100; //srlv
+default: ALUControl = 4'b0010; //slt
+endcase
+end
+
+end
+
+
+
+
+
+
+
+endmodule
