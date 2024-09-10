@@ -1,8 +1,6 @@
 module TOP #(parameter DATA_WIDTH=32, INSTR_MEM_DEPTH=1024, Data_MEM_DEPTH=1024, REG_DEPTH=32)
 (
     input wire CLK,WE,RST
-  //  input wire [DATA_WIDTH-1:0] INSTRUCTIONS,
-   //output wire [DATA_WIDTH-1:0] Result
 
 );
 
@@ -13,13 +11,14 @@ wire [DATA_WIDTH-1:0] ALU_Result;
 wire [DATA_WIDTH-1:0] WriteData,RD2, ReadData ;
 wire [DATA_WIDTH-1:0] Instr;
 wire [DATA_WIDTH-1:0] SrcA,SrcB;
-wire Jump,Branch,MemtoReg, MemWrite, RegDst, RegWrite,jr,jalr,bne;
+wire Jump,Branch,MemtoReg, MemWrite, RegDst, RegWrite,jr,jalr;
 wire [2:0] load;
 wire [1:0] store,MultoRF;
-wire [3:0] ALUControl;
+wire [4:0] ALUControl;
 wire [4:0]WriteReg; //$rt , $rd
-wire Zero, PCSrc_beq, PCSrc_bne, PCSrc;
+wire Zero, PCSrc_beq, PCSrc_bne, PCSrc_blez_bgtz, PCSrc_bltz_bgez, PCSrc ;
 wire[1:0] ALUSrc;
+    
 //HI_LO:
 wire [1:0] multiply,divide,HI_sel,LO_sel;
 wire [2*DATA_WIDTH-1:0] mult_result,div_result;
@@ -30,14 +29,11 @@ assign PCPlus4= PC+'d4;
 assign PCBranch= (sign_Imm<<2) + PCPlus4;
 assign PCSrc_beq =Branch && Zero;
 assign PCSrc_bne=Branch && !Zero;
+assign PCSrc_blez_bgtz= Branch && ALU_Result;
+assign PCSrc_bltz_bgez = Branch && ( ((|ALU_Result) && (&Instr[20:16])) || ((|ALU_Result) && (~|Instr[20:16])) );
 
 
-mux2to1#(.WIDTH(DATA_WIDTH)) MUXto_beq_bne (
-.in1(PCSrc_beq),
-.in2(PCSrc_bne),
-.sel(bne),
-.out(PCSrc)
-);
+PCSrc = PCSrc_beq || PCSrc_bne || PCSrc_blez_bgtz || PCSrc_bltz_bgez ;
 
 mux2to1#(.WIDTH(DATA_WIDTH)) MUXtoBranch (
 .in1(PCPlus4),
@@ -59,8 +55,6 @@ mux2to1 #(.WIDTH(DATA_WIDTH)) MUXtoJr (
 .out(prog_counter)
 );
 
-
-
 PC_reg #(.DATA_WIDTH(DATA_WIDTH)) PC_flipflop
 (
 .CLK(CLK),
@@ -78,7 +72,6 @@ mux3to1 #(.WIDTH(DATA_WIDTH)) MUXtoDataMem (
 );
 
 
-
 RAM #(.DATA_WIDTH(DATA_WIDTH),.MEM_DEPTH(Data_MEM_DEPTH)) Data_memo
 (
 .CLK(CLK),
@@ -91,9 +84,8 @@ RAM #(.DATA_WIDTH(DATA_WIDTH),.MEM_DEPTH(Data_MEM_DEPTH)) Data_memo
 RAM #(.DATA_WIDTH(DATA_WIDTH),.MEM_DEPTH(INSTR_MEM_DEPTH)) Instr_mem 
 (
 .CLK(CLK),
-//.WE(WE),//write enable
+.WE(WE),//write enable
 .A(PC),//address
-//.WD(INSTRUCTIONS),
 .RD(Instr) 
 );
 
@@ -161,20 +153,12 @@ mux6to1 #(.WIDTH(DATA_WIDTH)) MUXtoload (
 );
 
 
-
-
-
 mux2to1 #(.WIDTH(DATA_WIDTH)) MUXtoJalr (
 .in1(final_Result),
 .in2(PCPlus4),
 .sel(jalr),
 .out(Data_to_RF_1)
 );
-
-
-
-
-
 
 
 CU control_unit
@@ -193,14 +177,12 @@ CU control_unit
 .divide(divide),
 .LO_sel(LO_sel),
 .HI_sel(HI_sel),
-.bne(bne),
+//.bne(bne),
 .load(load),
 .store(store),
 .MultoRF(MultoRF),
 .ALUControl(ALUControl) 
 );
-
-
 
 mult #(.DATA_WIDTH(DATA_WIDTH)) Multiplyy
 (
@@ -210,9 +192,6 @@ mult #(.DATA_WIDTH(DATA_WIDTH)) Multiplyy
 .sign(multiply[0]),  
 .C(mult_result)
 );
-
-
-
 
 div #(.DATA_WIDTH(DATA_WIDTH)) Dividee
 (
@@ -224,14 +203,14 @@ div #(.DATA_WIDTH(DATA_WIDTH)) Dividee
 );
 
 mux3to1#(.WIDTH(DATA_WIDTH)) MUXtoHI (
-.in1(SrcA), //move from rs to HI
+.in1(SrcA), //mthi
 .in2(mult_result[63:32]), //rs x rt
 .in3(div_result[63:32]),
 .sel(HI_sel),
 .out(HI_IN)
 );
 mux3to1#(.WIDTH(DATA_WIDTH)) MUXtoLO (
-.in1(SrcA), //move from [rs] to LO
+.in1(SrcA), //mtlo
 .in2(mult_result[31:0]), //[rs] x [rt]
 .in3(div_result[31:0]), //[rs]/[rt]
 .sel(LO_sel),
@@ -258,30 +237,8 @@ GP_regs #(.DATA_WIDTH(DATA_WIDTH)) HI_LO
 );
 
 
-
-
-
-
-
-
-
-
-
 endmodule
 
 
 
 
-/*
-
-
-mux2to1#(.WIDTH(DATA_WIDTH)) MUX0 (
-.in1(),
-.in2(),
-.sel(),
-.out()
-);
-
-
-
-*/
