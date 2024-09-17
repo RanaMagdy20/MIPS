@@ -1,6 +1,8 @@
 module TOP #(parameter DATA_WIDTH=32, INSTR_MEM_DEPTH=1024, Data_MEM_DEPTH=1024, REG_DEPTH=32)
 (
-    input wire CLK,WE,RST
+    input wire CLK,WE,RST,
+  input wire [DATA_WIDTH-1:0] INSTRUCTIONS, //to avoid optimization by synth tool
+   output wire [DATA_WIDTH-1:0] s0 //to show  content of [s0]
 
 );
 
@@ -15,25 +17,24 @@ wire Jump,Branch,MemtoReg, MemWrite, RegDst, RegWrite,jr,jalr;
 wire [2:0] load;
 wire [1:0] store,MultoRF;
 wire [4:0] ALUControl;
-wire [4:0]WriteReg; //$rt , $rd
+wire [4:0]WriteReg,WriteReg_addr; 
 wire Zero, PCSrc_beq, PCSrc_bne, PCSrc_blez_bgtz, PCSrc_bltz_bgez, PCSrc ;
 wire[1:0] ALUSrc;
-    
 //HI_LO:
 wire [1:0] multiply,divide,HI_sel,LO_sel;
 wire [2*DATA_WIDTH-1:0] mult_result,div_result;
 wire [DATA_WIDTH-1:0] HI_out,LO_out,HI_IN,LO_IN;
-
+wire [DATA_WIDTH-1:0]  sign_Imm_shifted;
 assign PCJump = {PCPlus4[31:28],{Instr[25:0]<<2}}; ///////
 assign PCPlus4= PC+'d4;
-assign PCBranch= (sign_Imm<<2) + PCPlus4;
+assign sign_Imm_shifted =sign_Imm<<2;
+assign PCBranch=  sign_Imm_shifted + PCPlus4;
 assign PCSrc_beq =Branch && Zero;
 assign PCSrc_bne=Branch && !Zero;
 assign PCSrc_blez_bgtz= Branch && ALU_Result;
 assign PCSrc_bltz_bgez = Branch && ( ((|ALU_Result) && (&Instr[20:16])) || ((|ALU_Result) && (~|Instr[20:16])) );
 
-
-PCSrc = PCSrc_beq || PCSrc_bne || PCSrc_blez_bgtz || PCSrc_bltz_bgez ;
+assign PCSrc = PCSrc_beq || PCSrc_bne || PCSrc_blez_bgtz || PCSrc_bltz_bgez ;
 
 mux2to1#(.WIDTH(DATA_WIDTH)) MUXtoBranch (
 .in1(PCPlus4),
@@ -62,7 +63,7 @@ PC_reg #(.DATA_WIDTH(DATA_WIDTH)) PC_flipflop
 .prog_counter(prog_counter),
 .PC(PC)
 );
-
+//sw,sb,sh
 mux3to1 #(.WIDTH(DATA_WIDTH)) MUXtoDataMem (
 .in1(RD2),
 .in2(RD2[7:0]),
@@ -70,6 +71,7 @@ mux3to1 #(.WIDTH(DATA_WIDTH)) MUXtoDataMem (
 .sel(store),
 .out(WriteData)
 );
+
 
 
 RAM #(.DATA_WIDTH(DATA_WIDTH),.MEM_DEPTH(Data_MEM_DEPTH)) Data_memo
@@ -86,6 +88,7 @@ RAM #(.DATA_WIDTH(DATA_WIDTH),.MEM_DEPTH(INSTR_MEM_DEPTH)) Instr_mem
 .CLK(CLK),
 .WE(WE),//write enable
 .A(PC),//address
+.WD(INSTRUCTIONS),
 .RD(Instr) 
 );
 
@@ -97,16 +100,26 @@ mux2to1 #(.WIDTH(DATA_WIDTH)) MUXtoRegDst (
 .out(WriteReg)
 );
 
+
+mux2to1 #(.WIDTH(DATA_WIDTH)) MUX_ra_rd_rt (
+.in1(WriteReg),
+.in2(5'd31), //$ra
+.sel(jalr),
+.out(WriteReg_addr)
+);
+
+
  Reg_file #(.DATA_WIDTH(DATA_WIDTH),.DEPTH(REG_DEPTH)) RF
 (
 .CLK(CLK),
 .WE(RegWrite),
 .A1(Instr[25:21]),
 .A2(Instr[20:16]),
-.A3(WriteReg), 
+.A3(WriteReg_addr), 
 .WD3(Data_to_RF),
 .RD1(SrcA),
-.RD2(RD2)
+.RD2(RD2),
+.s0(s0)
 );
 
 Sign_Ext  #(.DATA_WIDTH(DATA_WIDTH)) Sign_extension
@@ -184,6 +197,7 @@ CU control_unit
 .ALUControl(ALUControl) 
 );
 
+
 mult #(.DATA_WIDTH(DATA_WIDTH)) Multiplyy
 (
 .A(SrcA),
@@ -235,6 +249,7 @@ GP_regs #(.DATA_WIDTH(DATA_WIDTH)) HI_LO
 .HI_out(HI_out),
 .LO_out(LO_out)
 );
+
 
 
 endmodule
