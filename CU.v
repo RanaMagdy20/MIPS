@@ -126,6 +126,8 @@ always @(*) begin
     6'b000_011: begin //jal
         ALUOp=2'b00;
         Jump=1'b1;
+        RegWrite=1'b1;
+
     end        
     6'b011_100: begin //mul
        // multiply=2'b11;
