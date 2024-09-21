@@ -14,6 +14,7 @@ wire [DATA_WIDTH-1:0] WriteData,RD2, ReadData ;
 wire [DATA_WIDTH-1:0] Instr;
 wire [DATA_WIDTH-1:0] SrcA,SrcB;
 wire Jump,Branch,MemtoReg, MemWrite, RegDst, RegWrite,jr,jalr;
+//wire bne;
 wire [2:0] load;
 wire [1:0] store,MultoRF;
 wire [4:0] ALUControl;
@@ -29,10 +30,13 @@ assign PCJump = {PCPlus4[31:28],{Instr[25:0]<<2}}; ///////
 assign PCPlus4= PC+'d4;
 assign sign_Imm_shifted =sign_Imm<<2;
 assign PCBranch=  sign_Imm_shifted + PCPlus4;
-assign PCSrc_beq =Branch && Zero;
-assign PCSrc_bne=Branch && !Zero;
+assign PCSrc_beq =(Instr[31:26]=='d4)? (Branch && Zero) : 'd0;
+assign PCSrc_bne= (Instr[31:26]=='d5)? (Branch && !Zero) : 'd0;
 assign PCSrc_blez_bgtz= Branch && ALU_Result;
 assign PCSrc_bltz_bgez = Branch && ( ((|ALU_Result) && (&Instr[20:16])) || ((|ALU_Result) && (~|Instr[20:16])) );
+
+
+
 
 assign PCSrc = PCSrc_beq || PCSrc_bne || PCSrc_blez_bgtz || PCSrc_bltz_bgez ;
 
@@ -55,6 +59,8 @@ mux2to1 #(.WIDTH(DATA_WIDTH)) MUXtoJr (
 .sel(jr),
 .out(prog_counter)
 );
+
+
 
 PC_reg #(.DATA_WIDTH(DATA_WIDTH)) PC_flipflop
 (
@@ -197,7 +203,6 @@ CU control_unit
 .ALUControl(ALUControl) 
 );
 
-
 mult #(.DATA_WIDTH(DATA_WIDTH)) Multiplyy
 (
 .A(SrcA),
@@ -251,9 +256,6 @@ GP_regs #(.DATA_WIDTH(DATA_WIDTH)) HI_LO
 );
 
 
-
 endmodule
-
-
 
 
